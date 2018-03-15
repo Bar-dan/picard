@@ -35,23 +35,12 @@ import picard.cmdline.CommandLineProgram;
 import picard.cmdline.StandardOptionDefinitions;
 import picard.cmdline.programgroups.BaseCallingProgramGroup;
 import picard.illumina.parser.*;
-import picard.illumina.parser.readers.BclQualityEvaluationStrategy;
-import picard.util.AdapterPair;
 import picard.util.IlluminaUtil;
-import picard.util.IlluminaUtil.IlluminaAdapterPair;
 import picard.util.TabbedTextFileWithHeaderParser;
 
 import java.io.Closeable;
 import java.io.File;
-import java.text.ParseException;
-import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadPoolExecutor;
-import java.util.concurrent.TimeUnit;
-
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 
 /**
  * IlluminaBamDemux demultiplexes one unaligned BAM file per lane into a set on unaligned bam files per sample.
@@ -231,7 +220,7 @@ public class IlluminaBamDemux extends CommandLineProgram {
 
 
                 if (i%500000 == 0) {
-                    log.info("Read "+i+" records");
+                    log.debug("Read "+i+" records");
                 }
             }
 
@@ -268,8 +257,6 @@ public class IlluminaBamDemux extends CommandLineProgram {
                 throw new IllegalArgumentException("The LIBRARY_PARAMS file is missing the " + SAMPLE_NAME_COL + " column");
             }
 
-            final boolean hasLibraryName = barcodesParser.hasColumn(LIBRARY_NAME_COL);
-            final boolean hasDualIndex = barcodesParser.hasColumn(BARCODE2_COL);
 
             int numBarcodes = readStructure.sampleBarcodes.length();
 
@@ -290,15 +277,15 @@ public class IlluminaBamDemux extends CommandLineProgram {
                     throw new IllegalArgumentException("Sample name not found in row " + i + " of LIBRARY_PARAMS.");
                 }
 
-                String libraryName = hasLibraryName ? row.getField(LIBRARY_NAME_COL).trim() : sampleName;
+                String libraryName = barcodesParser.hasColumn(LIBRARY_NAME_COL) ? row.getField(LIBRARY_NAME_COL).trim() : sampleName;
                 if (libraryName.isEmpty()) libraryName = sampleName;
 
-                String bc1 = getBarcode(row.getField(BARCODE1_COL), sampleName, 0);
+                String bc1 = parseBarcode(row.getField(BARCODE1_COL), sampleName, 0);
                 if (bc1 == null) {
                     throw new IllegalArgumentException("Invalid " + BARCODE1_COL + " found for sample " + sampleName + " of LIBRARY_PARAMS. ");
                 }
 
-                String bc2 = (hasDualIndex) ? getBarcode(row.getField(BARCODE2_COL), sampleName, 1) : null;
+                String bc2 = ( barcodesParser.hasColumn(BARCODE2_COL)) ? parseBarcode(row.getField(BARCODE2_COL), sampleName, 1) : null;
 
                 if (numBarcodes == 1 && bc2 != null) {
                     log.warn("Sample  " + sampleName + " has two barcodes in LIBRARY_PARAMS, but only one barcode was read in run. The second barcode will be ignored. ");
@@ -318,7 +305,20 @@ public class IlluminaBamDemux extends CommandLineProgram {
                 );
 
                 for (ExtractIlluminaBarcodes.BarcodeMetric otherBarcode: barcodes.values()) {
-                    int mismatches = ExtractIlluminaBarcodes.PerTileBarcodeExtractor.countMismatches(barcodeMetric.barcodeBytes, otherBarcode.barcodeBytes, null, 0);
+                    byte[][] firstBarcodeBytes;
+                    byte[][] otherBarcodeBytes;
+
+                    //ensure that the barcode with fewer reads is first
+                    if (barcodeMetric.barcodeBytes.length <= otherBarcode.barcodeBytes.length){
+                        firstBarcodeBytes = barcodeMetric.barcodeBytes;
+                        otherBarcodeBytes = otherBarcode.barcodeBytes;
+                    }else {
+                        otherBarcodeBytes = barcodeMetric.barcodeBytes;
+                        firstBarcodeBytes = otherBarcode.barcodeBytes;
+                    }
+
+
+                    int mismatches = ExtractIlluminaBarcodes.PerTileBarcodeExtractor.countMismatches(firstBarcodeBytes, otherBarcodeBytes, null, 0);
                     if (mismatches<=MAX_MISMATCHES) {
                         throw new IllegalArgumentException("Error in LIBRARY_PARAMS: Barcode "+barcodeMetric.BARCODE_WITHOUT_DELIMITER+" for sample "+barcodeMetric.BARCODE_NAME+
                         "collides with barcode "+otherBarcode.BARCODE_WITHOUT_DELIMITER+" of sample "+otherBarcode.BARCODE_NAME+
@@ -344,7 +344,7 @@ public class IlluminaBamDemux extends CommandLineProgram {
         }
     }
 
-    private String getBarcode(String barcodeString, String sampleName, int barcodeIndex){
+    private String parseBarcode(String barcodeString, String sampleName, int barcodeIndex){
 
         String bc = barcodeString.trim().toUpperCase();
         if (bc==null || bc.isEmpty() || !bc.matches("[ATCG]+")){
@@ -489,8 +489,10 @@ public class IlluminaBamDemux extends CommandLineProgram {
             SAMProgramRecord thisProgram = buildThisProgramHeaderInfo(previousProgram);
             header.addProgramRecord(thisProgram);
 
+            String rgSuffix = getRgSuffix(barcode);
+
             for (SAMReadGroupRecord previousRg: previousHeader.getReadGroups()){
-                String rgId = previousRg.getId() + getRgSuffix(barcode);
+                String rgId = previousRg.getId() + rgSuffix;
                 final SAMReadGroupRecord rg = new SAMReadGroupRecord(rgId, previousRg);
                 if (barcode!=null && barcodes.containsKey(barcode)){
                     String sample = barcodes.get(barcode).BARCODE_NAME;
@@ -499,6 +501,7 @@ public class IlluminaBamDemux extends CommandLineProgram {
                     rg.setLibrary(library);
                 }
                 rg.setProgramGroup(thisProgram.getProgramGroupId());
+                rg.setPlatformUnit(previousRg.getPlatformUnit()+rgSuffix);
                 header.addReadGroup(rg);
             }
 
