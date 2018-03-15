@@ -29,7 +29,6 @@ import htsjdk.samtools.SAMTag;
 import htsjdk.samtools.SAMUtils;
 import htsjdk.samtools.filter.SamRecordFilter;
 import htsjdk.samtools.filter.SolexaNoiseFilter;
-import org.broadinstitute.barclay.argparser.CommandLineParser;
 import picard.PicardException;
 import picard.fastq.IlluminaReadNameEncoder;
 import picard.fastq.ReadNameEncoder;
@@ -55,11 +54,11 @@ public class ClusterDataToSamConverter implements
     private final String readGroupId;
     private final SamRecordFilter filters = new SolexaNoiseFilter();
     private final boolean isPairedEnd;
-    private final boolean hasSampleBarcode;
+    protected final boolean hasSampleBarcode;
     private final boolean hasMolecularBarcode;
-    private final int[] templateIndices;
-    private final int[] sampleBarcodeIndices;
-    private final int[] molecularBarcodeIndices;
+    private final int [] templateIndices;
+    private final int [] sampleBarcodeIndices;
+    private final int [] molecularBarcodeIndices;
 
     private final AdapterMarker adapterMarker;
     private final int outputRecordsPerCluster;
@@ -262,6 +261,9 @@ public class ClusterDataToSamConverter implements
                 molecularIndexes.add(convertMissingToNoCall(new String(cluster.getRead(molecularBarcodeIndice).getBases())));
                 molecularIndexQualities.add(SAMUtils.phredToFastq(cluster.getRead(molecularBarcodeIndice).getQualities()));
             }
+        } else {
+            molecularIndexes        = Collections.emptyList();
+            molecularIndexQualities = Collections.emptyList();
         }
 
         final SAMRecord firstOfPair = createSamRecord(
