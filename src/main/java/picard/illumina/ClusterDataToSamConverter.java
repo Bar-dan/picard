@@ -57,10 +57,10 @@ public class ClusterDataToSamConverter implements
     private final String readGroupId;
     private final SamRecordFilter filters = new SolexaNoiseFilter();
     private final boolean isPairedEnd;
-    private final boolean hasSampleBarcode;
+    protected final boolean hasSampleBarcode;
     private final boolean hasMolecularBarcode;
     private final int [] templateIndices;
-    private final int [] sampleBarcodeIndices;
+    protected final int [] sampleBarcodeIndices;
     private final int [] molecularBarcodeIndices;
 
     private final AdapterMarker adapterMarker;
