@@ -336,9 +336,11 @@ public class IlluminaBasecallsToUndemuxSam extends CommandLineProgram {
         final SAMFileHeader header = new SAMFileHeader();
         header.setSortOrder(SAMFileHeader.SortOrder.queryname);
 
-        String rgId = getReadGroupId(illuminaXMLParser);
+        final SAMProgramRecord thisProgramRecord = buildThisProgramHeaderInfo(illuminaXMLParser.getRtaProgram().getProgramGroupId());
 
+        String rgId = getReadGroupId(illuminaXMLParser);
         final SAMReadGroupRecord rg = new SAMReadGroupRecord(rgId);
+
         rg.setSample(rgId);
         rg.setLibrary(rgId);
 
@@ -348,12 +350,12 @@ public class IlluminaBasecallsToUndemuxSam extends CommandLineProgram {
             }
         }
 
-        rg.setProgramGroup(illuminaXMLParser.getInstrumentProgram().getProgramGroupId());
+        rg.setProgramGroup(thisProgramRecord.getProgramGroupId());
         header.addReadGroup(rg);
 
         header.addProgramRecord(illuminaXMLParser.getInstrumentProgram());
         header.addProgramRecord(illuminaXMLParser.getRtaProgram());
-        header.addProgramRecord(buildThisProgramHeaderInfo(illuminaXMLParser.getRtaProgram().getProgramGroupId()));
+        header.addProgramRecord(thisProgramRecord);
 
         String comment = "READ_STRUCTURE="+readStructure.toString();
         header.addComment(comment);
