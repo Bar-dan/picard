@@ -918,7 +918,7 @@ public class ExtractIlluminaBarcodes extends CommandLineProgram {
          *
          * @return how many bases did not match
          */
-        private static int countMismatches(final byte[][] barcodeBytes, final byte[][] readSubsequence, final byte[][] qualities, final int minimumBaseQuality) {
+        public static int countMismatches(final byte[][] barcodeBytes, final byte[][] readSubsequence, final byte[][] qualities, final int minimumBaseQuality) {
             int numMismatches = 0;
 
             for (int j = 0; j < barcodeBytes.length; j++) {
