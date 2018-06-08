@@ -48,12 +48,12 @@ import java.util.*;
  * In this application, barcode data is read from the BC field per each read (of pairs of reads in case of PE reads).
  */
 @CommandLineProgramProperties(
-        summary = IlluminaBamDemux.USAGE_SUMMARY,
-        oneLineSummary = IlluminaBamDemux.USAGE_SUMMARY,
+        summary = IlluminaSamDemux.USAGE_SUMMARY,
+        oneLineSummary = IlluminaSamDemux.USAGE_SUMMARY,
         programGroup = BaseCallingProgramGroup.class
 )
 @DocumentedFeature
-public class IlluminaBamDemux extends CommandLineProgram {
+public class IlluminaSamDemux extends CommandLineProgram {
 
     static final String USAGE_SUMMARY = " Demultiplexes one unaligned BAM file per lane into a set on unaligned bam files per sample.";
     static final String SAMPLE_NAME_COL = "SAMPLE_NAME";
@@ -108,7 +108,7 @@ public class IlluminaBamDemux extends CommandLineProgram {
     private Map<String, ExtractIlluminaBarcodes.BarcodeMetric> barcodes = new HashMap<>();
     private ExtractIlluminaBarcodes.BarcodeMetric noMatchMetric;
     private SamReader inputReader;
-    private static final Log log = Log.getInstance(IlluminaBamDemux.class);
+    private static final Log log = Log.getInstance(IlluminaSamDemux.class);
 
     /**
      * Put any custom command-line validation in an override of this method.
@@ -242,7 +242,7 @@ public class IlluminaBamDemux extends CommandLineProgram {
     }
 
     public static void main(final String[] args) {
-        System.exit(new IlluminaBamDemux().instanceMain(args));
+        System.exit(new IlluminaSamDemux().instanceMain(args));
     }
 
     private void parseBarcodeFile() {
