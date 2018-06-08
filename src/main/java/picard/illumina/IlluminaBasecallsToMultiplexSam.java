@@ -75,12 +75,12 @@ import java.util.*;
  * @author mccowan@broadinstitute.org
  */
 @CommandLineProgramProperties(
-        summary = IlluminaBasecallsToUndemuxSam.USAGE_SUMMARY + IlluminaBasecallsToUndemuxSam.USAGE_DETAILS,
-        oneLineSummary = IlluminaBasecallsToUndemuxSam.USAGE_SUMMARY,
+        summary = IlluminaBasecallsToMultiplexSam.USAGE_SUMMARY + IlluminaBasecallsToMultiplexSam.USAGE_DETAILS,
+        oneLineSummary = IlluminaBasecallsToMultiplexSam.USAGE_SUMMARY,
         programGroup = BaseCallingProgramGroup.class
 )
 @DocumentedFeature
-public class IlluminaBasecallsToUndemuxSam extends CommandLineProgram {
+public class IlluminaBasecallsToMultiplexSam extends CommandLineProgram {
 
     static final String USAGE_SUMMARY = "Transforms raw Illumina sequencing data into an unmapped, undemultiplexed SAM or BAM file.";
     static final String USAGE_DETAILS = "<p>The IlluminaBasecallsToUndemuxSam program collects reads across all " +
@@ -175,7 +175,7 @@ public class IlluminaBasecallsToUndemuxSam extends CommandLineProgram {
     private final Map<String, IlluminaBasecallsToSam.SAMFileWriterWrapper> barcodeSamWriterMap = new HashMap<>();
     private ReadStructure readStructure;
     private BasecallsConverter<IlluminaBasecallsToSam.SAMRecordsForCluster> basecallsConverter;
-    private static final Log log = Log.getInstance(IlluminaBasecallsToUndemuxSam.class);
+    private static final Log log = Log.getInstance(IlluminaBasecallsToMultiplexSam.class);
     private File baseCallsDir;
 
     /**
@@ -293,7 +293,7 @@ public class IlluminaBasecallsToUndemuxSam extends CommandLineProgram {
         final Map<String, String> params = new LinkedHashMap<>();
 
         params.put("PL", PLATFORM);
-        params.put("PU", illuminaXMLParser.getIlluminaUniqueRunId());
+        params.put("PU", illuminaXMLParser.getIlluminaUniqueRunId()+"_"+LANE);
         params.put("CN", SEQUENCING_CENTER);
 
         SimpleDateFormat sdf = new SimpleDateFormat("yyMMdd");
@@ -364,7 +364,7 @@ public class IlluminaBasecallsToUndemuxSam extends CommandLineProgram {
     }
 
     public static void main(final String[] args) {
-        System.exit(new IlluminaBasecallsToUndemuxSam().instanceMain(args));
+        System.exit(new IlluminaBasecallsToMultiplexSam().instanceMain(args));
     }
 
 
