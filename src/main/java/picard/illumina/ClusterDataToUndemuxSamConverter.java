@@ -57,7 +57,7 @@ public class ClusterDataToUndemuxSamConverter extends ClusterDataToSamConverter 
                                             final String readGroupId,
                                             final ReadStructure readStructure,
                                             final List<AdapterPair> adapters) {
-        super(runBarcode,readGroupId,readStructure,adapters);
+        super(runBarcode,readGroupId,readStructure,adapters, PopulateBarcode.ALWAYS, true);
     }
 
     /**
