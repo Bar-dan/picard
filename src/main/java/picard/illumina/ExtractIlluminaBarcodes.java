@@ -842,20 +842,29 @@ public class ExtractIlluminaBarcodes extends CommandLineProgram {
                                                                    final int minimumBaseQuality) {
             BarcodeMetric bestBarcodeMetric = null;
             int totalBarcodeReadBases = 0;
-            int numNoCalls = 0; // NoCalls are calculated for all the barcodes combined
 
             for (final byte[] bc : readSubsequences) {
                 totalBarcodeReadBases += bc.length;
-                for (final byte b : bc) if (SequenceUtil.isNoCall(b)) ++numNoCalls;
+                //for (final byte b : bc) if (SequenceUtil.isNoCall(b)) ++numNoCalls;
             }
 
             // PIC-506 When forcing all reads to match a single barcode, allow a read to match even if every
             // base is a mismatch.
             int numMismatchesInBestBarcode = totalBarcodeReadBases + 1;
             int numMismatchesInSecondBestBarcode = totalBarcodeReadBases + 1;
+            int longestBarcode = 0;
+
 
             for (final BarcodeMetric barcodeMetric : metrics.values()) {
-                final int numMismatches = countMismatches(barcodeMetric.barcodeBytes, readSubsequences, qualityScores, minimumBaseQuality);
+                byte[][] barcodeBytes = barcodeMetric.barcodeBytes;
+
+                int thisBCLenght = 0;
+                for (int j = 0; j < barcodeBytes.length; j++) {
+                    thisBCLenght += barcodeBytes[j].length;
+                }
+                if (thisBCLenght>longestBarcode) longestBarcode = thisBCLenght;
+
+                final int numMismatches = countMismatches(barcodeBytes, readSubsequences, qualityScores, minimumBaseQuality);
                 if (numMismatches < numMismatchesInBestBarcode) {
                     if (bestBarcodeMetric != null) {
                         numMismatchesInSecondBestBarcode = numMismatchesInBestBarcode;
@@ -866,6 +875,17 @@ public class ExtractIlluminaBarcodes extends CommandLineProgram {
                     numMismatchesInSecondBestBarcode = numMismatches;
                 }
             }
+
+            int numNoCalls = 0; // NoCalls are calculated for all the barcodes combined up to the base corresponding to the longest barcode in sample sheets
+            int i = 0;
+
+            for (int j = 0; (j < readSubsequences.length && i<longestBarcode); j++) {
+                for (int k = 0; (k < readSubsequences[j].length && i<longestBarcode); k++ ) {
+                   if (SequenceUtil.isNoCall(readSubsequences[j][k])) ++numNoCalls;
+                   i++;
+                }
+            }
+
 
             final boolean matched = bestBarcodeMetric != null &&
                     numNoCalls <= maxNoCalls &&
