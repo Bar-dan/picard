@@ -54,7 +54,7 @@ public class ReadStructure {
     public static final String PARAMETER_DOC =
             "A description of the logical structure of clusters in an Illumina Run, i.e. a description of the structure IlluminaBasecallsToSam "    +
             "assumes the  data to be in. It should consist of integer/character pairs describing the number of cycles and the type of those "       +
-            "cycles (B for Sample Barcode, M for molecular barcode, T for Template, and S for skip).  E.g. If the input data consists of 80 "       +
+            "cycles (B for Sample Barcode, M for molecular barcode, C for cellular barcode, T for Template and S for skip).  E.g. If the input data consists of 80 "       +
             "base clusters and we provide a read structure of \"28T8M8B8S28T\" then the sequence may be split up into four reads:\n"                +
             "* read one with 28 cycles (bases) of template\n" +
             "* read two with 8 cycles (bases) of molecular barcode (ex. unique molecular barcode)\n" +
@@ -69,6 +69,7 @@ public class ReadStructure {
     public final Substructure sampleBarcodes;
     public final Substructure templates;
     public final Substructure molecularBarcode;
+    public final Substructure cellBarcode;
 
     public final Substructure skips;
 
@@ -124,6 +125,8 @@ public class ReadStructure {
         final List<Integer> templateIndicesList         = new ArrayList<Integer>();
         final List<Integer> molecularBarcodeIndicesList = new ArrayList<Integer>();
         final List<Integer> skipIndicesList             = new ArrayList<Integer>();
+        final List<Integer> cellBarcodeIndicesList      = new ArrayList<Integer>();
+
         readLengths = new int[collection.size()];
 
         int currentCycleIndex = 0;   // Current cycle in the entire read structure
@@ -155,6 +158,10 @@ public class ReadStructure {
                     nonSkipIndicesList.add(descIndex);
                     molecularBarcodeIndicesList.add(descIndex);
                     break;
+                case C:
+                    nonSkipIndicesList.add(descIndex);
+                    cellBarcodeIndicesList.add(descIndex);
+                    break;
 
                 default:
                     throw new IllegalArgumentException("Unsupported ReadType (" + desc.type + ") encountered by IlluminaRunConfiugration!");
@@ -167,6 +174,7 @@ public class ReadStructure {
         this.templates        = new Substructure(templateIndicesList,         allRanges);
         this.skips            = new Substructure(skipIndicesList,             allRanges);
         this.molecularBarcode = new Substructure(molecularBarcodeIndicesList, allRanges);
+        this.cellBarcode = new Substructure(cellBarcodeIndicesList, allRanges);
         this.nonSkips         = new Substructure(nonSkipIndicesList,          allRanges);
     }
 
