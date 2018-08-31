@@ -31,10 +31,11 @@ package picard.illumina.parser;
 * Note: Currently SKIP is unused by IlluminaBasecallsToSam, ExtractIlluminaBarcodes, and IlluminaDataProvider
 **/
 public enum ReadType {
-    T, B, M, S;
+    T, B, M, S, C;
 
     public static final ReadType Template       = T;
     public static final ReadType Barcode        = B;
     public static final ReadType MolecularIndex = M;
     public static final ReadType Skip           = S;
+    public static final ReadType Cell           = C;
 }
