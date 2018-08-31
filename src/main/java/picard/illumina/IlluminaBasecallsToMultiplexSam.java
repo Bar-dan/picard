@@ -112,22 +112,6 @@ public class IlluminaBasecallsToMultiplexSam extends CommandLineProgram {
     @Argument(doc = "The name of the sequencing center that produced the reads.  Used to set the RG.CN tag.", optional = true)
     public String SEQUENCING_CENTER = "BI";
 
-    @Argument(doc = ReadStructure.PARAMETER_DOC, shortName = "RS", optional = true)
-    public String READ_STRUCTURE;
-
-    @Argument(doc = "Which adapters to look for in the read.")
-    public List<IlluminaAdapterPair> ADAPTERS_TO_CHECK = new ArrayList<>(
-            Arrays.asList(IlluminaAdapterPair.INDEXED,
-                    IlluminaAdapterPair.DUAL_INDEXED,
-                    IlluminaAdapterPair.NEXTERA_V2,
-                    IlluminaAdapterPair.FLUIDIGM));
-
-    @Argument(doc = "For specifying adapters other than standard Illumina", optional = true)
-    public String FIVE_PRIME_ADAPTER;
-
-    @Argument(doc = "For specifying adapters other than standard Illumina", optional = true)
-    public String THREE_PRIME_ADAPTER;
-
     @Argument(doc = "The number of threads to run in parallel. If NUM_PROCESSORS = 0, number of cores is automatically set to " +
             "the number of cores available on the machine. If NUM_PROCESSORS < 0, then the number of cores used will" +
             " be the number available on the machine less NUM_PROCESSORS.")
@@ -160,16 +144,6 @@ public class IlluminaBasecallsToMultiplexSam extends CommandLineProgram {
     @Argument(doc = "Whether to include non-PF reads", shortName = "NONPF", optional = true)
     public boolean INCLUDE_NON_PF_READS = true;
 
-    @Argument(doc = "The tag to use to store any molecular indexes.  If more than one molecular index is found, they will be concatenated and stored here.", optional = true)
-    public String MOLECULAR_INDEX_TAG = "RX";
-
-    @Argument(doc = "The tag to use to store any molecular index base qualities.  If more than one molecular index is found, their qualities will be concatenated and stored here " +
-            "(.i.e. the number of \"M\" operators in the READ_STRUCTURE)", optional = true)
-    public String MOLECULAR_INDEX_BASE_QUALITY_TAG = "QX";
-
-    @Argument(doc = "The list of tags to store each molecular index.  The number of tags should match the number of molecular indexes.", optional = true)
-    public List<String> TAG_PER_MOLECULAR_INDEX;
-
     public String PLATFORM = "ILLUMINA";
 
     private final Map<String, IlluminaBasecallsToSam.SAMFileWriterWrapper> barcodeSamWriterMap = new HashMap<>();
@@ -189,14 +163,6 @@ public class IlluminaBasecallsToMultiplexSam extends CommandLineProgram {
     @Override
     protected String[] customCommandLineValidation() {
         final ArrayList<String> messages = new ArrayList<>();
-
-        if (!TAG_PER_MOLECULAR_INDEX.isEmpty() && TAG_PER_MOLECULAR_INDEX.size() != readStructure.molecularBarcode.length()) {
-            messages.add("The number of tags given in TAG_PER_MOLECULAR_INDEX does not match the number of molecular indexes in READ_STRUCTURE");
-        }
-
-        if ((FIVE_PRIME_ADAPTER == null) != (THREE_PRIME_ADAPTER == null)) {
-            messages.add("THREE_PRIME_ADAPTER and FIVE_PRIME_ADAPTER must either both be null or both be set.");
-        }
 
         if (messages.isEmpty()) {
             return null;
@@ -226,22 +192,11 @@ public class IlluminaBasecallsToMultiplexSam extends CommandLineProgram {
 
         IlluminaXMLParser illuminaXMLParser = new IlluminaXMLParser(RUN_DIR);
 
-        if (READ_STRUCTURE!=null) {
-            readStructure = new ReadStructure(READ_STRUCTURE);
-        }else{
-            readStructure = illuminaXMLParser.getReadStructure();
-        }
+        readStructure = illuminaXMLParser.getReadStructure();
 
         barcodeSamWriterMap.put(null, buildSamFileWriter(OUTPUT, illuminaXMLParser));
 
         final int numOutputRecords = readStructure.templates.length();
-
-        // Combine any adapters and custom adapter pairs from the command line into an array for use in clipping
-        final List<AdapterPair> adapters = new ArrayList<>();
-        adapters.addAll(ADAPTERS_TO_CHECK);
-        if (FIVE_PRIME_ADAPTER != null && THREE_PRIME_ADAPTER != null) {
-            adapters.add(new CustomAdapterPair(FIVE_PRIME_ADAPTER, THREE_PRIME_ADAPTER));
-        }
 
         if (IlluminaFileUtil.hasCbcls(baseCallsDir, LANE)) {
             basecallsConverter = new NewIlluminaBasecallsConverter<>(baseCallsDir, baseCallsDir, LANE, readStructure,
@@ -260,12 +215,9 @@ public class IlluminaBasecallsToMultiplexSam extends CommandLineProgram {
          * Be sure to pass the outputReadStructure to ClusterDataToSamConverter, which reflects the structure of the output cluster
          * data which may be different from the input read structure (specifically if there are skips).
          */
-        final ClusterDataToSamConverter converter = new ClusterDataToUndemuxSamConverter(
+        final BasecallsConverter.ClusterDataConverter converter = new ClusterDataToMultiplexSamConverter(
                 getRunBarcode(illuminaXMLParser),getReadGroupId(illuminaXMLParser),
-                basecallsConverter.getFactory().getOutputReadStructure(), adapters)
-                .withMolecularIndexTag(MOLECULAR_INDEX_TAG)
-                .withMolecularIndexQualityTag(MOLECULAR_INDEX_BASE_QUALITY_TAG)
-                .withTagPerMolecularIndex(TAG_PER_MOLECULAR_INDEX);
+                basecallsConverter.getFactory().getOutputReadStructure());
 
         basecallsConverter.setConverter(converter);
         log.info("DONE_READING STRUCTURE IS " + readStructure.toString());
