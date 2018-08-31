@@ -73,7 +73,7 @@ public class ClusterDataToSamConverter implements
     // TODO: also add ~ and - to some htsjdk file and reference here.
     private String MOLECULAR_INDEX_TAG = "RX";
     private String MOLECULAR_INDEX_QUALITY_TAG = "QX";
-    private static final String MOLECULAR_INDEX_ = "-";
+    private static final String MOLECULAR_INDEX_DELIMITER = "-";
     private static final String MOLECULAR_INDEX_QUALITY_DELIMITER = "~";
     private static final Character MISSING_BARCODE = '.';
     private static final Character MISSING_BARCODE_BASE = 'N';
@@ -213,10 +213,10 @@ public class ClusterDataToSamConverter implements
 
         if (!molecularIndexes.isEmpty()) {
             if (!this.MOLECULAR_INDEX_TAG.isEmpty()) {
-                sam.setAttribute(this.MOLECULAR_INDEX_TAG, String.join(MOLECULAR_INDEX_, molecularIndexes));
+                sam.setAttribute(this.MOLECULAR_INDEX_TAG, String.join(MOLECULAR_INDEX_DELIMITER, molecularIndexes));
             }
             if (!this.MOLECULAR_INDEX_QUALITY_TAG.isEmpty()) {
-                sam.setAttribute(this.MOLECULAR_INDEX_QUALITY_TAG, String.join(MOLECULAR_INDEX_, molecularIndexQualities));
+                sam.setAttribute(this.MOLECULAR_INDEX_QUALITY_TAG, String.join(MOLECULAR_INDEX_QUALITY_DELIMITER, molecularIndexQualities));
             }
             if (!this.tagPerMolecularIndex.isEmpty()) {
                 if (tagPerMolecularIndex.size() != molecularIndexes.size()) {
