@@ -348,7 +348,7 @@ public class SamToSamMapper {
                     firstRecord.getReadName(),
                     firstRecord.getReadGroup().getReadGroupId(),
                     firstRecord.getReadFailsVendorQualityCheckFlag(),
-                    true,
+                    false,
                     null,
                     null,
                     new ArrayList<>(),
@@ -371,7 +371,7 @@ public class SamToSamMapper {
 
     private String getBarcodeQuality(byte[] qualities) {
 
-        final StringJoiner barcodeQ = new StringJoiner(MOLECULAR_INDEX_QUALITY_DELIMITER);
+        final StringJoiner barcodeQ = new StringJoiner("");
         byte[][] barcodeQualities = getSeqs(qualities, readStructure.sampleBarcodes.getCycleIndexRanges());
 
         for (byte[] barcodeQuality : barcodeQualities) {
@@ -381,7 +381,7 @@ public class SamToSamMapper {
     }
 
     private String getUnmatchedBarcode(byte[] bases) {
-        return convertMissingToNoCall(IlluminaUtil.barcodeSeqsToString(getSeqs(bases, readStructure.sampleBarcodes.getCycleIndexRanges())));
+        return convertMissingToNoCall(IlluminaUtil.byteArrayToString(getSeqs(bases, readStructure.sampleBarcodes.getCycleIndexRanges()),""));
     }
 
     private byte[][] getSeqs (byte[] array, Range[] cycleRanges){
