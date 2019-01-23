@@ -64,7 +64,7 @@ def ensureBuildPrerequisites(requiredJavaVersion, buildPrerequisitesMessage) {
 }
 ensureBuildPrerequisites(requiredJavaVersion, buildPrerequisitesMessage)
 
-final htsjdkVersion = System.getProperty('htsjdk.version', '2.18.2')
+final htsjdkVersion = System.getProperty('htsjdk.version', '2.18.2-CeMM')
 
 // We use a custom shaded build of the NIO library to avoid a regression in the authentication layer.
 // GATK does the same, see https://github.com/broadinstitute/gatk/issues/3591
@@ -114,7 +114,10 @@ targetCompatibility = 1.8
 
 final isRelease = Boolean.getBoolean("release")
 final gitVersion = gitVersion().replaceAll(".dirty", "")
-version = isRelease ? gitVersion : gitVersion + "-SNAPSHOT"
+
+//version = isRelease ? gitVersion : gitVersion + "-SNAPSHOT"
+
+version=gitVersion
 
 logger.info("build for version:" + version)
 group = 'com.github.broadinstitute'

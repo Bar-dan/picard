@@ -69,7 +69,7 @@ public class ReadStructureTest {
                 {"0M" ,      makeList(rd(0,  M))},
                 {"-1B",      makeList(rd(-1, B))},
                 {"-1M",      makeList(rd(-1, M))},
-                {"8C",       null},
+                {"8D",       null},
                 {"B5",       null},
                 {"SS",       null},
                 {"SM",       null},
