@@ -2,6 +2,7 @@ package picard.vcf;
 
 import htsjdk.samtools.SAMSequenceDictionary;
 import htsjdk.samtools.util.*;
+import htsjdk.samtools.util.blockcompression.BlockCompressedOutputStreamFactory;
 import htsjdk.tribble.AbstractFeatureReader;
 import htsjdk.variant.variantcontext.VariantContext;
 import htsjdk.variant.variantcontext.VariantContextComparator;
@@ -18,10 +19,7 @@ import picard.cmdline.CommandLineProgram;
 import picard.cmdline.StandardOptionDefinitions;
 import picard.cmdline.programgroups.VariantManipulationProgramGroup;
 
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.*;
@@ -268,7 +266,7 @@ public class GatherVcfs extends CommandLineProgram {
                         // If we found the end of the header then write the remainder of this block out as a
                         // new gzip block and then break out of the while loop
                         if (firstNonHeaderByteIndex >= 0) {
-                            final BlockCompressedOutputStream blockOut = new BlockCompressedOutputStream(out, (Path)null);
+                            final OutputStream blockOut = BlockCompressedOutputStreamFactory.makeBlockCompressedOutputStream(out, (Path)null);
                             blockOut.write(blockContents, firstNonHeaderByteIndex, blockContents.length - firstNonHeaderByteIndex);
                             blockOut.flush();
                             // Don't close blockOut because closing underlying stream would break everything
