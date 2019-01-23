@@ -1,6 +1,6 @@
 package picard.illumina.parser.fakers;
 
-import htsjdk.samtools.util.BlockCompressedOutputStream;
+import htsjdk.samtools.util.blockcompression.BlockCompressedOutputStreamFactory;
 import picard.illumina.parser.readers.BclReader;
 
 import java.io.File;
@@ -60,7 +60,7 @@ public abstract class FileFaker {
 
         final OutputStream outputStream;
         if (BclReader.isGzipped(cycleFile)) outputStream = new GZIPOutputStream(new FileOutputStream(cycleFile));
-        else if (BclReader.isBlockGzipped(cycleFile)) outputStream = new BlockCompressedOutputStream(cycleFile);
+        else if (BclReader.isBlockGzipped(cycleFile)) outputStream = BlockCompressedOutputStreamFactory.makeBlockCompressedOutputStream(cycleFile);
         else outputStream = new FileOutputStream(cycleFile);
 
         final WritableByteChannel channel = Channels.newChannel(outputStream);
