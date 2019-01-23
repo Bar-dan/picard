@@ -351,10 +351,10 @@ public class SamToSamMapper {
                     false,
                     null,
                     null,
-                    new ArrayList<>(),
-                    new ArrayList<>(),
-                    new ArrayList<>(),
-                    new ArrayList<>());
+                    molecularIndexes,
+                    molecularIndexQualities,
+                    cellIndexes,
+                    cellIndexQualities);
             ret.records[1] = secondOfPair;
         }
 
