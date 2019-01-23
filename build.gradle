@@ -64,7 +64,7 @@ def ensureBuildPrerequisites(requiredJavaVersion, buildPrerequisitesMessage) {
 }
 ensureBuildPrerequisites(requiredJavaVersion, buildPrerequisitesMessage)
 
-final htsjdkVersion = System.getProperty('htsjdk.version', '2.19.0')
+final htsjdkVersion = System.getProperty('htsjdk.version', '2.19.1-CeMM')
 final googleNio = 'com.google.cloud:google-cloud-nio:0.81.0-alpha:shaded'
 
 // Get the jdk files we need to run javaDoc. We need to use these during compile, testCompile,
@@ -111,7 +111,10 @@ targetCompatibility = 1.8
 
 final isRelease = Boolean.getBoolean("release")
 final gitVersion = gitVersion().replaceAll(".dirty", "")
-version = isRelease ? gitVersion : gitVersion + "-SNAPSHOT"
+
+//version = isRelease ? gitVersion : gitVersion + "-SNAPSHOT"
+
+version=gitVersion
 
 logger.info("build for version:" + version)
 group = 'com.github.broadinstitute'

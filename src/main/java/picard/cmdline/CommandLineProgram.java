@@ -34,10 +34,10 @@ import htsjdk.samtools.metrics.Header;
 import htsjdk.samtools.metrics.MetricBase;
 import htsjdk.samtools.metrics.MetricsFile;
 import htsjdk.samtools.metrics.StringHeader;
-import htsjdk.samtools.util.BlockCompressedOutputStream;
 import htsjdk.samtools.util.BlockGunzipper;
 import htsjdk.samtools.util.IOUtil;
 import htsjdk.samtools.util.Log;
+import htsjdk.samtools.util.blockcompression.BlockCompressedOutputStreamFactory;
 import htsjdk.variant.variantcontext.writer.Options;
 import htsjdk.variant.variantcontext.writer.VariantContextWriterBuilder;
 import org.broadinstitute.barclay.argparser.Argument;
@@ -139,6 +139,9 @@ public abstract class CommandLineProgram {
     @Argument(shortName = "use_jdk_inflater", doc = "Use the JDK Inflater instead of the Intel Inflater for reading compressed input", common = true)
     public Boolean USE_JDK_INFLATER = false;
 
+    @Argument(shortName = "deflater_threads", doc = "Number of threads used by compressed block deflater", common = true)
+    public int DEFLATER_THREADS = 0;
+
     private static final String[] PACKAGES_WITH_WEB_DOCUMENTATION = {"picard"};
 
     static {
@@ -232,7 +235,7 @@ public abstract class CommandLineProgram {
           System.setProperty("ga4gh.client_secrets", GA4GH_CLIENT_SECRETS);
         }
         SamReaderFactory.setDefaultValidationStringency(VALIDATION_STRINGENCY);
-        BlockCompressedOutputStream.setDefaultCompressionLevel(COMPRESSION_LEVEL);
+        BlockCompressedOutputStreamFactory.setDefaultCompressionLevel(COMPRESSION_LEVEL);
 
         if (VALIDATION_STRINGENCY != ValidationStringency.STRICT) VariantContextWriterBuilder.setDefaultOption(Options.ALLOW_MISSING_FIELDS_IN_HEADER);
 
@@ -256,12 +259,14 @@ public abstract class CommandLineProgram {
         }
 
         if (!USE_JDK_DEFLATER) {
-            BlockCompressedOutputStream.setDefaultDeflaterFactory(new IntelDeflaterFactory());
+            BlockCompressedOutputStreamFactory.setDefaultDeflaterFactory(new IntelDeflaterFactory());
         }
 
         if (!USE_JDK_INFLATER) {
             BlockGunzipper.setDefaultInflaterFactory(new IntelInflaterFactory());
         }
+
+        BlockCompressedOutputStreamFactory.initMultiThreading(DEFLATER_THREADS);
 
         if (!QUIET) {
             System.err.println("[" + new Date() + "] " + commandLine);
@@ -273,8 +278,8 @@ public abstract class CommandLineProgram {
                                 .map(provider -> String.format("Provider %s is%s available;", provider.name(), provider.isAvailable ? "" : " not"))
                                 .collect(Collectors.joining(" "));
 
-                final boolean usingIntelDeflater = (BlockCompressedOutputStream.getDefaultDeflaterFactory() instanceof IntelDeflaterFactory &&
-                        ((IntelDeflaterFactory)BlockCompressedOutputStream.getDefaultDeflaterFactory()).usingIntelDeflater());
+                final boolean usingIntelDeflater = (BlockCompressedOutputStreamFactory.getDefaultDeflaterFactory() instanceof IntelDeflaterFactory &&
+                        ((IntelDeflaterFactory)BlockCompressedOutputStreamFactory.getDefaultDeflaterFactory()).usingIntelDeflater());
                 final boolean usingIntelInflater = (BlockGunzipper.getDefaultInflaterFactory() instanceof IntelInflaterFactory &&
                         ((IntelInflaterFactory)BlockGunzipper.getDefaultInflaterFactory()).usingIntelInflater());
                 final String msg = String.format(
@@ -295,6 +300,7 @@ public abstract class CommandLineProgram {
             ret = doWork();
         } finally {
             try {
+                BlockCompressedOutputStreamFactory.close();
                 // Emit the time even if program throws
                 if (!QUIET) {
                     final Date endDate = new Date();
