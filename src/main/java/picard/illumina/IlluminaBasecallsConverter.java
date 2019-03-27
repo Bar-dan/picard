@@ -47,8 +47,6 @@ import java.util.Map;
 import java.util.NoSuchElementException;
 import java.util.Queue;
 import java.util.Set;
-import java.util.Timer;
-import java.util.TimerTask;
 import java.util.TreeMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.PriorityBlockingQueue;
@@ -93,9 +91,7 @@ public class IlluminaBasecallsConverter<CLUSTER_OUTPUT_RECORD> extends Basecalls
         DATA_TYPES_WITH_BARCODE[DATA_TYPES_WITH_BARCODE.length - 1] = IlluminaDataType.Barcodes;
     }
 
-    // If FORCE_GC, this is non-null.  For production this is not necessary because it will run until the JVM
-    // ends, but for unit testing it is desirable to stop the task when done with this instance.
-    private final TimerTask gcTimerTask;
+
 
     /**
      * @param basecallsDir             Where to read basecalls from.
@@ -182,7 +178,7 @@ public class IlluminaBasecallsConverter<CLUSTER_OUTPUT_RECORD> extends Basecalls
                 demultiplex, outputRecordComparator, bclQualityEvaluationStrategy, outputRecordClass,
                 numProcessors,
                 new IlluminaDataProviderFactory(basecallsDir, barcodesDir, lane, readStructure,
-                        bclQualityEvaluationStrategy, getDataTypesFromReadStructure(readStructure, demultiplex)));
+                        bclQualityEvaluationStrategy, getDataTypesFromReadStructure(readStructure, demultiplex)), forceGc);
         this.includeNonPfReads = includeNonPfReads;
         this.tiles = factory.getAvailableTiles();
         // Since the first non-fixed part of the read name is the tile number, without preceding zeroes,
@@ -191,23 +187,6 @@ public class IlluminaBasecallsConverter<CLUSTER_OUTPUT_RECORD> extends Basecalls
         setTileLimits(firstTile, tileLimit);
 
         this.numThreads = Math.max(1, Math.min(this.numThreads, tiles.size()));
-        // If we're forcing garbage collection, collect every 5 minutes in a daemon thread.
-        if (forceGc) {
-            final Timer gcTimer = new Timer(true);
-            final long delay = 5 * 1000 * 60;
-            gcTimerTask = new TimerTask() {
-                @Override
-                public void run() {
-                    log.info("Before explicit GC, Runtime.totalMemory()=" + Runtime.getRuntime().totalMemory());
-                    System.gc();
-                    System.runFinalization();
-                    log.info("After explicit GC, Runtime.totalMemory()=" + Runtime.getRuntime().totalMemory());
-                }
-            };
-            gcTimer.scheduleAtFixedRate(gcTimerTask, delay, delay);
-        } else {
-            gcTimerTask = null;
-        }
 
         this.factory.setApplyEamssFiltering(applyEamssFiltering);
 
@@ -219,7 +198,7 @@ public class IlluminaBasecallsConverter<CLUSTER_OUTPUT_RECORD> extends Basecalls
      * setConverter() must be called before calling this method.
      */
     @Override
-    public void doTileProcessing() {
+    public void doTileProcessingImpl() {
         try {
 
             // Generate the list of tiles that will be processed
@@ -245,11 +224,6 @@ public class IlluminaBasecallsConverter<CLUSTER_OUTPUT_RECORD> extends Basecalls
             bclQualityEvaluationStrategy.assertMinimumQualities();
 
         } finally {
-            try {
-                if (gcTimerTask != null) gcTimerTask.cancel();
-            } catch (final Throwable ex) {
-                log.warn(ex, "Ignoring exception stopping background GC thread.");
-            }
             // Close the writers
             for (final Map.Entry<String, ? extends ConvertedClusterDataWriter<CLUSTER_OUTPUT_RECORD>> entry : barcodeRecordWriterMap.entrySet()) {
                 final ConvertedClusterDataWriter<CLUSTER_OUTPUT_RECORD> writer = entry.getValue();

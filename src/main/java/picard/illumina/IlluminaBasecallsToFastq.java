@@ -277,7 +277,7 @@ public class IlluminaBasecallsToFastq extends CommandLineProgram {
             if (BARCODES_DIR == null) BARCODES_DIR = BASECALLS_DIR;
             basecallsConverter = new NewIlluminaBasecallsConverter<>(BASECALLS_DIR, BARCODES_DIR, LANE, readStructure,
                     sampleBarcodeFastqWriterMap, demultiplex, Math.max(1, MAX_READS_IN_RAM_PER_TILE / readsPerCluster),
-                    TMP_DIR, NUM_PROCESSORS,
+                    TMP_DIR, NUM_PROCESSORS, FORCE_GC,
                     FIRST_TILE, TILE_LIMIT, queryNameComparator,
                     new FastqRecordsForClusterCodec(readStructure.templates.length(),
                             readStructure.sampleBarcodes.length(), readStructure.molecularBarcode.length()),
