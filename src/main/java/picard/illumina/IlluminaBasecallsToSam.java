@@ -310,7 +310,7 @@ public class IlluminaBasecallsToSam extends CommandLineProgram {
             if (BARCODES_DIR == null) BARCODES_DIR = BASECALLS_DIR;
             basecallsConverter = new NewIlluminaBasecallsConverter<>(BASECALLS_DIR, BARCODES_DIR, LANE, readStructure,
                     barcodeSamWriterMap, demultiplex, Math.max(1, MAX_READS_IN_RAM_PER_TILE / numOutputRecords),
-                    TMP_DIR, NUM_PROCESSORS,
+                    TMP_DIR, NUM_PROCESSORS, FORCE_GC,
                     FIRST_TILE, TILE_LIMIT, new QueryNameComparator(),
                     new Codec(numOutputRecords),
                     SAMRecordsForCluster.class, bclQualityEvaluationStrategy, IGNORE_UNEXPECTED_BARCODES);
@@ -587,6 +587,11 @@ public class IlluminaBasecallsToSam extends CommandLineProgram {
 
         SAMRecordsForCluster(final int numRecords) {
             records = new SAMRecord[numRecords];
+        }
+
+        @Override
+        public  String toString(){
+            return records[0].getReadName();
         }
     }
 
