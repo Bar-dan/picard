@@ -125,7 +125,6 @@ public class BaseErrorCalculationTest {
             }
 
             try (final SAMFileWriter writer = new SAMFileWriterFactory()
-                    .setCompressionLevel(2)
                     .makeBAMWriter(builder.getHeader(), false, temp)) {
                 builder.forEach(writer::addAlignment);
             }
