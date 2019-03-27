@@ -9,9 +9,7 @@ import picard.illumina.parser.IlluminaDataProviderFactory;
 import picard.illumina.parser.readers.BclQualityEvaluationStrategy;
 
 import java.io.File;
-import java.util.Comparator;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 
 abstract class BasecallsConverter<CLUSTER_OUTPUT_RECORD> {
     private static final Log log = Log.getInstance(BasecallsConverter.class);
@@ -32,6 +30,10 @@ abstract class BasecallsConverter<CLUSTER_OUTPUT_RECORD> {
     protected final BclQualityEvaluationStrategy bclQualityEvaluationStrategy;
     protected List<Integer> tiles;
     protected final IlluminaDataProviderFactory factory;
+
+    // If FORCE_GC, this is non-null.  For production this is not necessary because it will run until the JVM
+    // ends, but for unit testing it is desirable to stop the task when done with this instance.
+    private final TimerTask gcTimerTask;
 
     /**
      * @param barcodeRecordWriterMap   Map from barcode to CLUSTER_OUTPUT_RECORD writer.  If demultiplex is false, must contain
@@ -56,7 +58,8 @@ abstract class BasecallsConverter<CLUSTER_OUTPUT_RECORD> {
                        final BclQualityEvaluationStrategy bclQualityEvaluationStrategy,
                        final Class<CLUSTER_OUTPUT_RECORD> outputRecordClass,
                        final int numProcessors,
-                       final IlluminaDataProviderFactory factory) {
+                       final IlluminaDataProviderFactory factory,
+                       final boolean forceGc) {
 
         this.barcodeRecordWriterMap = barcodeRecordWriterMap;
         this.maxReadsInRamPerTile = maxReadsInRamPerTile;
@@ -77,13 +80,43 @@ abstract class BasecallsConverter<CLUSTER_OUTPUT_RECORD> {
         } else {
             this.numThreads = numProcessors;
         }
+
+        if (forceGc) {
+            final Timer gcTimer = new Timer(true);
+            final long delay = 5 * 1000 * 60;
+            gcTimerTask = new TimerTask() {
+                @Override
+                public void run() {
+                    log.info("Before explicit GC, Runtime.totalMemory()=" + Runtime.getRuntime().totalMemory());
+                    System.gc();
+                    System.runFinalization();
+                    log.info("After explicit GC, Runtime.totalMemory()=" + Runtime.getRuntime().totalMemory());
+                }
+            };
+            gcTimer.scheduleAtFixedRate(gcTimerTask, delay, delay);
+        } else {
+            gcTimerTask = null;
+        }
     }
 
     public IlluminaDataProviderFactory getFactory() {
         return factory;
     }
 
-    public abstract void doTileProcessing();
+    public void doTileProcessing() {
+        try {
+            doTileProcessingImpl();
+        } finally {
+            try {
+                if (gcTimerTask != null) gcTimerTask.cancel();
+            } catch (final Throwable ex) {
+                log.warn(ex, "Ignoring exception stopping background GC thread.");
+            }
+
+        }
+    }
+
+    protected abstract void doTileProcessingImpl();
 
     /**
      * Must be called before doTileProcessing.  This is not passed in the ctor because often the

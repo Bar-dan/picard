@@ -1,5 +1,6 @@
 package picard.util;
 
+import htsjdk.samtools.util.Log;
 import picard.PicardException;
 
 import java.util.concurrent.CancellationException;
@@ -15,6 +16,8 @@ import java.util.concurrent.TimeUnit;
  */
 public class ThreadPoolExecutorWithExceptions extends ThreadPoolExecutor {
     public Throwable exception = null;
+    private static final Log log = Log.getInstance(ThreadPoolExecutorWithExceptions.class);
+
 
     /**
      * Creates a fixed size thread pool executor that will rethrow exceptions from submitted jobs.
@@ -51,6 +54,7 @@ public class ThreadPoolExecutorWithExceptions extends ThreadPoolExecutor {
     protected void beforeExecute(Thread t, Runnable r) {
         super.beforeExecute(t, r);
         t.setUncaughtExceptionHandler((t1, e) -> {
+            log.error(e);
             throw new PicardException("Uncaught exception in thread: " + t1.getName() + " : " + e.getMessage(), e);
         });
     }

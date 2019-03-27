@@ -201,7 +201,7 @@ public class IlluminaBasecallsToMultiplexSam extends CommandLineProgram {
         if (IlluminaFileUtil.hasCbcls(baseCallsDir, LANE)) {
             basecallsConverter = new NewIlluminaBasecallsConverter<>(baseCallsDir, baseCallsDir, LANE, readStructure,
                     barcodeSamWriterMap, false, Math.max(1, MAX_READS_IN_RAM_PER_TILE / numOutputRecords),
-                    TMP_DIR, NUM_PROCESSORS,
+                    TMP_DIR, NUM_PROCESSORS, FORCE_GC,
                     FIRST_TILE, TILE_LIMIT, new IlluminaBasecallsToSam.QueryNameComparator(),
                     new IlluminaBasecallsToSam.Codec(numOutputRecords),
                     IlluminaBasecallsToSam.SAMRecordsForCluster.class, bclQualityEvaluationStrategy, true);
