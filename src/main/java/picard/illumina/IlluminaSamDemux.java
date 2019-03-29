@@ -62,6 +62,7 @@ public class IlluminaSamDemux extends CommandLineProgram {
     static final String LIBRARY_NAME_COL = "LIBRARY_NAME";
     static final String BARCODE1_COL = "BARCODE_1";
     static final String BARCODE2_COL = "BARCODE_2";
+    static final String NONE_BARCODE = "NONE";
 
 
     @Argument(doc = "The input BAM file to be demultiplexed. ", shortName = "I")
@@ -141,12 +142,14 @@ public class IlluminaSamDemux extends CommandLineProgram {
 
     private ReadStructure readStructure;
     private Map<String, ExtractIlluminaBarcodes.BarcodeMetric> barcodes = new HashMap<>();
-    private ExtractIlluminaBarcodes.BarcodeMetric noMatchMetric;
+    private ExtractIlluminaBarcodes.BarcodeMetric noMatchMetric = null;
     private SamReader inputReader;
     private static final Log log = Log.getInstance(IlluminaSamDemux.class);
     private  List<AdapterPair> adapters = new ArrayList<>(ADAPTERS_TO_CHECK);
     private BlockingQueue<Future<List<BarcodeMatchResult>>> matchJobs = new LinkedBlockingQueue<>(MATCHING_THREADS*2);
     private int batchSize = 100000;
+
+    private boolean matchBarcode = true;
 
     /**
      * Put any custom command-line validation in an override of this method.
@@ -240,73 +243,76 @@ public class IlluminaSamDemux extends CommandLineProgram {
 
 
         ReadsWriter writer = null;
-        try {
-            initialize();
-            final BarcodeMatcher matcher = new BarcodeMatcher();
-            writer = new ReadsWriter();
+        initialize();
+        final BarcodeMatcher matcher = new BarcodeMatcher();
+        writer = new ReadsWriter();
 
+        try {
             Thread writerThread = new Thread(writer);
             writerThread.start();
 
             Iterator<SAMRecord> iterator = inputReader.iterator();
 
             ThreadPoolExecutorWithExceptions matchingExecutor = new ThreadPoolExecutorWithExceptions(MATCHING_THREADS);
-            log.info(String.format("Executor was started with %d threads",MATCHING_THREADS));
-
+            log.info(String.format("Executor was started with %d threads", MATCHING_THREADS));
 
             List<ReadToMatch> batchToProcess = new LinkedList<>();
-
 
             long iterTime = 0;
             long queueWaitTime = 0;
 
             int i = 0;
 
-            long startTime =System.currentTimeMillis();
+            long startTime = System.currentTimeMillis();
+
             while (iterator.hasNext()) {
                 SAMRecord currentRecord = iterator.next();
-                SAMRecord nextRecord= null;
-                if (currentRecord.getReadPairedFlag()){
-                    if (!currentRecord.getFirstOfPairFlag()){
-                        throw new PicardException("Record is marked as paired end but could not find first of pair "+currentRecord.getReadName());
+                SAMRecord nextRecord = null;
+                if (currentRecord.getReadPairedFlag()) {
+                    if (!currentRecord.getFirstOfPairFlag()) {
+                        throw new PicardException("Record is marked as paired end but could not find first of pair " + currentRecord.getReadName());
                     }
 
                     nextRecord = iterator.next();
-                    if (nextRecord==null ||
+                    if (nextRecord == null ||
                             !nextRecord.getReadPairedFlag() ||
                             !nextRecord.getSecondOfPairFlag() ||
-                            !nextRecord.getReadName().equals(currentRecord.getReadName())){
-                        throw new PicardException("Record is marked as paired end but could not find second of pair "+currentRecord.getReadName());
+                            !nextRecord.getReadName().equals(currentRecord.getReadName())) {
+                        throw new PicardException("Record is marked as paired end but could not find second of pair " + currentRecord.getReadName());
                     }
 
                 }
 
-                batchToProcess.add(new ReadToMatch(currentRecord,nextRecord));
+                batchToProcess.add(new ReadToMatch(currentRecord, nextRecord));
 
 
-                iterTime += System.currentTimeMillis()-startTime;
+                iterTime += System.currentTimeMillis() - startTime;
 
                 startTime = System.currentTimeMillis();
                 if (batchToProcess.size() == batchSize) {
                     matchJobs.put(matchingExecutor.submit(
-                            new BarcodeMatchJob(batchToProcess,matcher))
+                            new BarcodeMatchJob(batchToProcess, matcher))
                     );
                     batchToProcess = new LinkedList<>();
                 }
-                queueWaitTime += System.currentTimeMillis()-startTime;
+                queueWaitTime += System.currentTimeMillis() - startTime;
 
-                i+=1;
-                if (i %1000000 == 0){
-                    log.info(String.format("Read %d reads. Last 1000000. IterTime: %d, Queue Time: %d",i,iterTime,queueWaitTime));
-                    iterTime=0;
-                    queueWaitTime=0;
+                i += 1;
+                if (i % 1000000 == 0) {
+                    log.info(String.format("Read %d reads. Last 1000000. IterTime: %d, Queue Time: %d", i, iterTime, queueWaitTime));
+                    iterTime = 0;
+                    queueWaitTime = 0;
                 }
                 startTime = System.currentTimeMillis();
             }
 
+            if (!batchToProcess.isEmpty()){
+                matchJobs.put(matchingExecutor.submit(
+                        new BarcodeMatchJob(batchToProcess, matcher))
+                );
+            }
 
-            writer.setDone(true);
-
+            writer.setDone();
             matchingExecutor.shutdown();
             ThreadPoolExecutorUtil.awaitThreadPoolTermination("Matching executor", matchingExecutor, Duration.ofMinutes(5));
 
@@ -315,23 +321,28 @@ public class IlluminaSamDemux extends CommandLineProgram {
                 throw new PicardException("Matching executor had exceptions.", matchingExecutor.exception);
             }
 
-            ExtractIlluminaBarcodes.finalizeMetrics(barcodes,noMatchMetric);
+            ExtractIlluminaBarcodes.finalizeMetrics(barcodes, noMatchMetric==null? new ExtractIlluminaBarcodes.BarcodeMetric() : noMatchMetric);
 
             final MetricsFile<ExtractIlluminaBarcodes.BarcodeMetric, Integer> metrics = getMetricsFile();
             for (final ExtractIlluminaBarcodes.BarcodeMetric barcodeMetric : barcodes.values()) {
                 metrics.addMetric(barcodeMetric);
             }
-            metrics.addMetric(noMatchMetric);
+
+            if (noMatchMetric!=null) {
+                metrics.addMetric(noMatchMetric);
+            }
+
             metrics.write(METRICS_FILE);
 
+            writerThread.join();
+
             return 0;
-        } catch (InterruptedException e){
-            throw new PicardException("Interrupted" ,e);
-        } finally{
+        } catch (Exception e) {
+            throw new PicardException("Encountered Error", e);
+        } finally {
             CloserUtil.close(inputReader);
             CloserUtil.close(writer);
         }
-
     }
 
     public static void main(final String[] args) {
@@ -362,7 +373,10 @@ public class IlluminaSamDemux extends CommandLineProgram {
 
             int i = 0;
 
-            for (final TabbedTextFileWithHeaderParser.Row row : barcodesParser) {
+            Iterator<TabbedTextFileWithHeaderParser.Row> barcodeFileIterator = barcodesParser.iterator();
+            while(barcodeFileIterator.hasNext()) {
+                TabbedTextFileWithHeaderParser.Row row = barcodeFileIterator.next();
+
                 i++;
 
                 String sampleName = row.getField(SAMPLE_NAME_COL).trim();
@@ -376,6 +390,11 @@ public class IlluminaSamDemux extends CommandLineProgram {
                 String bc1 = parseBarcode(row.getField(BARCODE1_COL), sampleName, 0);
                 if (bc1 == null) {
                     throw new IllegalArgumentException("Invalid " + BARCODE1_COL + " found for sample " + sampleName + " of LIBRARY_PARAMS. ");
+                }else if (bc1.equals(NONE_BARCODE)){
+                    if (i>1 || barcodeFileIterator.hasNext()){
+                        throw new IllegalArgumentException("Invalid " + BARCODE1_COL + " found for sample " + sampleName + " of LIBRARY_PARAMS: NONE barcode lanes can contain only 1 sample  ");
+                    }
+                    matchBarcode = false;
                 }
 
                 String bc2 = ( barcodesParser.hasColumn(BARCODE2_COL)) ? parseBarcode(row.getField(BARCODE2_COL), sampleName, 1) : null;
@@ -385,6 +404,9 @@ public class IlluminaSamDemux extends CommandLineProgram {
                     bc2 = null;
                 } else if (numBarcodes == 2 && bc2 == null) {
                     log.warn("The read is dual indexed, but sample  " + sampleName + " has only one valid barcode in LIBRARY_PARAMS. Barcode 2 will be ignored. ");
+                } else  if (bc1.equals(NONE_BARCODE) && bc2 != null){
+                    log.warn("Sample  " + sampleName + " has a valid barcode 2 in LIBRARY_PARAMS, but barcode 1 is "+NONE_BARCODE+". The second barcode will be ignored. ");
+                    bc2 = null;
                 }
 
 
@@ -397,41 +419,44 @@ public class IlluminaSamDemux extends CommandLineProgram {
                         barcodesArray
                 );
 
-                for (ExtractIlluminaBarcodes.BarcodeMetric otherBarcode: barcodes.values()) {
+                for (ExtractIlluminaBarcodes.BarcodeMetric otherBarcode : barcodes.values()) {
                     byte[][] firstBarcodeBytes;
                     byte[][] otherBarcodeBytes;
 
                     //ensure that the barcode with fewer reads is first
-                    if (barcodeMetric.barcodeBytes.length <= otherBarcode.barcodeBytes.length){
+                    if (barcodeMetric.barcodeBytes.length <= otherBarcode.barcodeBytes.length) {
                         firstBarcodeBytes = barcodeMetric.barcodeBytes;
                         otherBarcodeBytes = otherBarcode.barcodeBytes;
-                    }else {
+                    } else {
                         otherBarcodeBytes = barcodeMetric.barcodeBytes;
                         firstBarcodeBytes = otherBarcode.barcodeBytes;
                     }
 
 
                     int mismatches = ExtractIlluminaBarcodes.PerTileBarcodeExtractor.countMismatches(firstBarcodeBytes, otherBarcodeBytes, null, 0);
-                    if (mismatches<=MAX_MISMATCHES) {
-                        throw new IllegalArgumentException("Error in LIBRARY_PARAMS: Barcode "+barcodeMetric.BARCODE_WITHOUT_DELIMITER+" for sample "+barcodeMetric.BARCODE_NAME+
-                        "collides with barcode "+otherBarcode.BARCODE_WITHOUT_DELIMITER+" of sample "+otherBarcode.BARCODE_NAME+
-                        ". There are "+mismatches+" mismatches which are less or equal than "+MAX_MISMATCHES+" MAX_MISMATCHES");
+                    if (mismatches <= MAX_MISMATCHES) {
+                        throw new IllegalArgumentException("Error in LIBRARY_PARAMS: Barcode " + barcodeMetric.BARCODE_WITHOUT_DELIMITER + " for sample " + barcodeMetric.BARCODE_NAME +
+                                "collides with barcode " + otherBarcode.BARCODE_WITHOUT_DELIMITER + " of sample " + otherBarcode.BARCODE_NAME +
+                                ". There are " + mismatches + " mismatches which are less or equal than " + MAX_MISMATCHES + " MAX_MISMATCHES");
                     }
                 }
 
-                barcodes.put(barcodeMetric.BARCODE_WITHOUT_DELIMITER,barcodeMetric);
+                barcodes.put(barcodeMetric.BARCODE_WITHOUT_DELIMITER, barcodeMetric);
+
             }
 
-
-            final String[] noMatchBarcode = new String[readStructure.sampleBarcodes.length()];
-            int index = 0;
-            for (final ReadDescriptor d : readStructure.descriptors) {
-                if (d.type == ReadType.Barcode) {
-                    noMatchBarcode[index++] = StringUtil.repeatCharNTimes('N', d.length);
+            if (matchBarcode) {
+                final String[] noMatchBarcode = new String[readStructure.sampleBarcodes.length()];
+                int index = 0;
+                for (final ReadDescriptor d : readStructure.descriptors) {
+                    if (d.type == ReadType.Barcode) {
+                        noMatchBarcode[index++] = StringUtil.repeatCharNTimes('N', d.length);
+                    }
                 }
+
+                noMatchMetric = new ExtractIlluminaBarcodes.BarcodeMetric(null, null, IlluminaUtil.barcodeSeqsToString(noMatchBarcode), noMatchBarcode);
             }
 
-            noMatchMetric = new ExtractIlluminaBarcodes.BarcodeMetric(null, null, IlluminaUtil.barcodeSeqsToString(noMatchBarcode), noMatchBarcode);
         }finally {
             barcodesParser.close();
         }
@@ -440,7 +465,9 @@ public class IlluminaSamDemux extends CommandLineProgram {
     private String parseBarcode(String barcodeString, String sampleName, int barcodeIndex){
 
         String bc = barcodeString.trim().toUpperCase();
-        if (bc==null || bc.isEmpty() || !bc.matches("[ATCG]+")){
+        if (bc==null || bc.isEmpty() || bc.equals(NONE_BARCODE)) {
+            return NONE_BARCODE;
+        } else if (!bc.matches("[ATCG]+")){
             return null;
         }
 
@@ -499,7 +526,7 @@ public class IlluminaSamDemux extends CommandLineProgram {
     }
 
 
-    private class ReadsWriter implements Closeable,Runnable {
+    private class ReadsWriter implements Runnable, Closeable {
         private final Map<String, SAMFileWriter> writers = new HashMap<>();
         private final SAMFileWriter noMatchWriter;
         private boolean isDone = false;
@@ -513,8 +540,12 @@ public class IlluminaSamDemux extends CommandLineProgram {
                 writers.put(barcodeMetric.BARCODE_WITHOUT_DELIMITER, fileWriter);
             }
 
-            String fileName = OUTPUT_PREFIX+getRgSuffix(null)+"."+OUTPUT_FORMAT;
-            noMatchWriter = buildSamFileWriter(new File(OUTPUT_DIR,fileName),inputReader.getFileHeader(), null);
+            if (matchBarcode) {
+                String fileName = OUTPUT_PREFIX + getRgSuffix(null) + "." + OUTPUT_FORMAT;
+                noMatchWriter = buildSamFileWriter(new File(OUTPUT_DIR, fileName), inputReader.getFileHeader(), null);
+            }else{
+                noMatchWriter = null;
+            }
         }
 
         @Override
@@ -526,31 +557,37 @@ public class IlluminaSamDemux extends CommandLineProgram {
             AtomicLong waitTime = new AtomicLong();
 
             long startWait = System.currentTimeMillis();
-            while (!isDone) {
-                try {
-                    Future<List<BarcodeMatchResult>> resultFuture = matchJobs.poll(500,TimeUnit.MILLISECONDS);
-                    if (resultFuture!=null){
+
+            try {
+                while (!isDone || (!matchJobs.isEmpty())) {
+                    Future<List<BarcodeMatchResult>> resultFuture = matchJobs.poll(500, TimeUnit.MILLISECONDS);
+                    if (resultFuture != null) {
                         long lastWaitTime = waitTime.addAndGet(System.currentTimeMillis() - startWait);
 
                         List<BarcodeMatchResult> results = resultFuture.get();
 
                         long startWrite = System.currentTimeMillis();
                         long processed;
-                        for (BarcodeMatchResult result: results) {
+                        for (BarcodeMatchResult result : results) {
                             SAMFileWriter writer;
                             if (result.barcodeMatch.matched) {
                                 writer = writers.get(result.barcodeMatch.barcode);
                             } else {
                                 writer = noMatchWriter;
                             }
+
+                            if (writer == null) {
+                                throw new PicardException("Writer not found for barcode " + (result.barcodeMatch.matched ? result.barcodeMatch.barcode : null));
+                            }
+
                             for (SAMRecord record : result.outputRecords) {
                                 writer.addAlignment(record);
                             }
 
-                            long lastWriteTime = writeTime.addAndGet(System.currentTimeMillis()- startWrite);
-                            if (( processed= i.incrementAndGet()) % 1000000 == 0){
-                                synchronized (this){
-                                    log.info(String.format("Wrote %d reads. Last 1000000. Write Time: %d, Wait Time: %d." ,processed, lastWriteTime, lastWaitTime));
+                            long lastWriteTime = writeTime.addAndGet(System.currentTimeMillis() - startWrite);
+                            if ((processed = i.incrementAndGet()) % 1000000 == 0) {
+                                synchronized (this) {
+                                    log.info(String.format("Wrote %d reads. Last 1000000. Write Time: %d, Wait Time: %d.", processed, lastWriteTime, lastWaitTime));
                                     writeTime.set(0);
                                     waitTime.set(0);
                                 }
@@ -561,13 +598,11 @@ public class IlluminaSamDemux extends CommandLineProgram {
 
                         startWait = System.currentTimeMillis();
                     }
-                }catch (InterruptedException e){
-                    log.info("Writer was interrupted");
-                    break;
-                }catch (ExecutionException e2){
-                    throw new PicardException("Error while processing records ",e2);
                 }
-
+            } catch (InterruptedException e) {
+                throw new PicardException("Writer was interrupted");
+            } catch (ExecutionException e2) {
+                throw new PicardException("Error while processing records ", e2);
             }
         }
 
@@ -580,8 +615,8 @@ public class IlluminaSamDemux extends CommandLineProgram {
         }
 
 
-        public void setDone(boolean done) {
-            isDone = done;
+        public void setDone() {
+            isDone = true;
         }
 
         private SAMFileWriter buildSamFileWriter(final File output, SAMFileHeader previousHeader, String barcode) {
@@ -650,38 +685,54 @@ public class IlluminaSamDemux extends CommandLineProgram {
             ExtractIlluminaBarcodes.PerTileBarcodeExtractor.BarcodeMatch barcodeMatch = new ExtractIlluminaBarcodes.PerTileBarcodeExtractor.BarcodeMatch();
             boolean passingFilter = !firstMappedRecord.getReadFailsVendorQualityCheckFlag();
 
-            if (firstMappedRecord.hasAttribute(BARCODE_TAG_NAME)) {
-                String barcode = firstMappedRecord.getAttribute(BARCODE_TAG_NAME).toString();
-                String barcodeQuality = firstMappedRecord.getAttribute(BARCODE_QUALITY_TAG_NAME).toString();
+            if(matchBarcode) {
+                if (firstMappedRecord.hasAttribute(BARCODE_TAG_NAME)) {
+                    String barcode = firstMappedRecord.getAttribute(BARCODE_TAG_NAME).toString();
+                    String barcodeQuality = firstMappedRecord.getAttribute(BARCODE_QUALITY_TAG_NAME).toString();
 
-                int numBarcodesReads = readStructure.sampleBarcodes.length();
-                byte[][] barcodesReads = new byte[numBarcodesReads][];
-                byte[][] barcodesQualities = new byte[numBarcodesReads][];
-                int startIndex = 0;
-                for (int i = 0; i < numBarcodesReads; i++) {
-                    ReadDescriptor barcodeDesc = readStructure.sampleBarcodes.get(i);
-                    barcodesReads[i] = htsjdk.samtools.util.StringUtil.stringToBytes(barcode.substring(startIndex, startIndex + barcodeDesc.length));
-                    barcodesQualities[i] = SAMUtils.fastqToPhred(barcodeQuality.substring(startIndex, startIndex + barcodeDesc.length));
-                    startIndex = startIndex + barcodeDesc.length;
+                    int numBarcodesReads = readStructure.sampleBarcodes.length();
+                    byte[][] barcodesReads = new byte[numBarcodesReads][];
+                    byte[][] barcodesQualities = new byte[numBarcodesReads][];
+                    int startIndex = 0;
+                    for (int i = 0; i < numBarcodesReads; i++) {
+                        ReadDescriptor barcodeDesc = readStructure.sampleBarcodes.get(i);
+                        barcodesReads[i] = htsjdk.samtools.util.StringUtil.stringToBytes(barcode.substring(startIndex, startIndex + barcodeDesc.length));
+                        barcodesQualities[i] = SAMUtils.fastqToPhred(barcodeQuality.substring(startIndex, startIndex + barcodeDesc.length));
+                        startIndex = startIndex + barcodeDesc.length;
+                    }
+
+                    barcodeMatch = ExtractIlluminaBarcodes.PerTileBarcodeExtractor.findBestBarcodeAndUpdateMetrics(
+                            barcodesReads,
+                            barcodesQualities,
+                            passingFilter,
+                            barcodes,
+                            noMatchMetric,
+                            MAX_NO_CALLS,
+                            MAX_MISMATCHES,
+                            MIN_MISMATCH_DELTA,
+                            MINIMUM_BASE_QUALITY
+                    );
+
+                } else {
+                    ++noMatchMetric.READS;
+                    if (passingFilter) {
+                        ++noMatchMetric.PF_READS;
+                    }
                 }
-
-                barcodeMatch = ExtractIlluminaBarcodes.PerTileBarcodeExtractor.findBestBarcodeAndUpdateMetrics(
-                        barcodesReads,
-                        barcodesQualities,
-                        passingFilter,
-                        barcodes,
-                        noMatchMetric,
-                        MAX_NO_CALLS,
-                        MAX_MISMATCHES,
-                        MIN_MISMATCH_DELTA,
-                        MINIMUM_BASE_QUALITY
-                );
-
             } else {
-                ++noMatchMetric.READS;
+                barcodeMatch.mismatches = 0;
+                barcodeMatch.mismatchesToSecondBest = 0;
+                ExtractIlluminaBarcodes.BarcodeMetric metric = barcodes.get(NONE_BARCODE);
+                barcodeMatch.barcode = metric.BARCODE_WITHOUT_DELIMITER;
+                ++metric.READS;
                 if (passingFilter) {
-                    ++noMatchMetric.PF_READS;
+                    ++metric.PF_READS;
                 }
+                ++metric.PERFECT_MATCHES;
+                if (passingFilter) {
+                    ++metric.PF_PERFECT_MATCHES;
+                }
+                barcodeMatch.matched = true;
             }
 
             String rgSuffix = getRgSuffix((barcodeMatch.matched) ? barcodeMatch.barcode : null);
