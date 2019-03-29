@@ -906,28 +906,32 @@ public class ExtractIlluminaBarcodes extends CommandLineProgram {
             }
 
             if (matched) {
-                ++bestBarcodeMetric.READS;
-                if (passingFilter) {
-                    ++bestBarcodeMetric.PF_READS;
-                }
-                if (numMismatchesInBestBarcode == 0) {
-                    ++bestBarcodeMetric.PERFECT_MATCHES;
+                synchronized (bestBarcodeMetric) {
+                    ++bestBarcodeMetric.READS;
                     if (passingFilter) {
-                        ++bestBarcodeMetric.PF_PERFECT_MATCHES;
+                        ++bestBarcodeMetric.PF_READS;
                     }
-                } else if (numMismatchesInBestBarcode == 1) {
-                    ++bestBarcodeMetric.ONE_MISMATCH_MATCHES;
-                    if (passingFilter) {
-                        ++bestBarcodeMetric.PF_ONE_MISMATCH_MATCHES;
+                    if (numMismatchesInBestBarcode == 0) {
+                        ++bestBarcodeMetric.PERFECT_MATCHES;
+                        if (passingFilter) {
+                            ++bestBarcodeMetric.PF_PERFECT_MATCHES;
+                        }
+                    } else if (numMismatchesInBestBarcode == 1) {
+                        ++bestBarcodeMetric.ONE_MISMATCH_MATCHES;
+                        if (passingFilter) {
+                            ++bestBarcodeMetric.PF_ONE_MISMATCH_MATCHES;
+                        }
                     }
                 }
 
                 match.matched = true;
                 match.barcode = bestBarcodeMetric.BARCODE_WITHOUT_DELIMITER;
             } else {
-                ++noMatchBarcodeMetric.READS;
-                if (passingFilter) {
-                    ++noMatchBarcodeMetric.PF_READS;
+                synchronized (noMatchBarcodeMetric) {
+                    ++noMatchBarcodeMetric.READS;
+                    if (passingFilter) {
+                        ++noMatchBarcodeMetric.PF_READS;
+                    }
                 }
             }
 

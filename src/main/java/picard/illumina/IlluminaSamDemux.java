@@ -261,7 +261,7 @@ public class IlluminaSamDemux extends CommandLineProgram {
             long iterTime = 0;
             long queueWaitTime = 0;
 
-            int i = 0;
+            long i = 0;
 
             long startTime = System.currentTimeMillis();
 
@@ -714,24 +714,29 @@ public class IlluminaSamDemux extends CommandLineProgram {
                     );
 
                 } else {
-                    ++noMatchMetric.READS;
-                    if (passingFilter) {
-                        ++noMatchMetric.PF_READS;
+                    synchronized (noMatchMetric) {
+                        ++noMatchMetric.READS;
+                        if (passingFilter) {
+                            ++noMatchMetric.PF_READS;
+                        }
                     }
                 }
             } else {
                 barcodeMatch.mismatches = 0;
                 barcodeMatch.mismatchesToSecondBest = 0;
                 ExtractIlluminaBarcodes.BarcodeMetric metric = barcodes.get(NONE_BARCODE);
+
+                synchronized (metric) {
+                    ++metric.READS;
+                    if (passingFilter) {
+                        ++metric.PF_READS;
+                    }
+                    ++metric.PERFECT_MATCHES;
+                    if (passingFilter) {
+                        ++metric.PF_PERFECT_MATCHES;
+                    }
+                }
                 barcodeMatch.barcode = metric.BARCODE_WITHOUT_DELIMITER;
-                ++metric.READS;
-                if (passingFilter) {
-                    ++metric.PF_READS;
-                }
-                ++metric.PERFECT_MATCHES;
-                if (passingFilter) {
-                    ++metric.PF_PERFECT_MATCHES;
-                }
                 barcodeMatch.matched = true;
             }
 
